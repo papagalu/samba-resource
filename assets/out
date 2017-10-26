@@ -1,0 +1,33 @@
+#!/bin/bash
+# vim: set ft=sh
+
+set -e
+
+exec 3>&1 # make stdout available as fd 3 for the result
+exec 1>&2 # redirect all output to stderr for logging
+
+from=$1
+
+if [ -z "$from" ]; then
+  echo "usage: $0 <path/to/source>"
+  exit 1
+fi
+
+# for jq
+PATH=/usr/local/bin:$PATH
+payload=$(mktemp $TMPDIR/samba-resource-request.XXXXXX)
+
+cat > $payload <&0
+
+samba_share=$(jq -r '.source.samba_share // ""' < $payload)
+folder=$(jq -r '.source.folder // ""' < $payload)
+password=$(jq -r '.source.password // ""' < $payload)
+
+smbclient $samba_share -c "prompt OFF;recurse ON;mkdir $folder; cd $folder; lcd $from; mput *" $password
+
+jq -n '{
+  "version": {"ref": "1.0"},
+  "metadata": []
+}' >&3
+
+exit 0
